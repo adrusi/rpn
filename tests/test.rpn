@@ -1,0 +1,8 @@
+$result print-result
+"result: " $result + print
+
+---
+
+main
+$x 1 2 + set
+$x print-result

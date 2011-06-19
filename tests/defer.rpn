@@ -1,0 +1,10 @@
+$lines lambda
+  $lines "length" get
+  ""
+  loop
+
+---
+
+main
+  $expr ("hello, world" `print) set
+  $expr un`

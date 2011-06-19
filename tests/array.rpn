@@ -1,0 +1,13 @@
+$arr get-third
+  $arr 3 get
+  
+---
+
+main
+  $arr
+    array 1 , 2 , 3 , 4 , 5 ,
+  set
+  
+  $3rd ($arr get-third) set
+  
+  $3rd print

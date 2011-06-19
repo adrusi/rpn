@@ -1,0 +1,11 @@
+main
+  $arr array 1 , 2 , 3 , 4 , 5 , gset
+
+  $arr "length" get
+    "main/loop"
+  loop
+
+---
+
+$i main/loop
+  $arr $i 1 - get print

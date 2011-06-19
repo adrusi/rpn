@@ -1,0 +1,12 @@
+$a $b $counter fib
+  $b print
+
+  $counter 0 >
+    $b $a $b + $counter 1 - `fib [ deferred expression ]
+  when
+
+---
+
+main
+  0 print
+  0 1 10 fib

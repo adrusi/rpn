@@ -1,0 +1,8 @@
+main
+  $val 8 set
+  (5 6 ≤) ($val arr) "main/response" when-data
+
+---
+
+$val main/response
+  $val 2 % 0 = "true" `print "false" `print if

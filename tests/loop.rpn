@@ -1,0 +1,27 @@
+$arr print-all
+  [ print-all prints all members of an array ]
+
+  $arr "length" get      [ gets the number of elements in the array ]
+    array $arr ,         [ this creates a single element array containing $arr ]
+    "print-all/loop"
+  loop-data
+
+  [ Loop-data accepts the number or iterations as the first argument, an array of data as the second,
+    and the function to run with the given data for each iteration as the third. ]
+
+---
+
+$i $arr print-all/loop
+  [ Print-all-loop is the loop function for print-all.
+    Naming convention is hyphen separated words and functions that are used for
+    things like looping and conditionals should be prefixed by their parent function
+    and separated by a slash. ]
+
+  $arr ($i 1 -) get print      [ print the element of the array of the current iteration minus one ]
+
+---
+
+main
+  array 1 , 2 , 3 , 4 , 5 , print-all
+
+  [ notice that arrays are created using multiple cons-like function, they aren't literal, but they appear so ]

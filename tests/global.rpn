@@ -1,0 +1,21 @@
+main
+  $finally
+    $deferred `un`
+    $three `print
+    ,
+  set
+  
+  $one 1 set
+  $two 2 gset
+  other
+  
+  $finally run
+  $deferred un`
+  $three print
+
+---
+
+other
+  $one print
+  $two print
+  $deferred $three 3 `gset gset
