@@ -1,426 +1,185 @@
-#!/usr/bin/env node
+#!/usr/bin/env js
 
-var input = require("fs").readFileSync(
-  require("path").join(process.cwd(), process.argv[process.argv.length - 1]),
-  "utf8"
-);
-global.gvars = {};
-function exec(input, fns, vars) {
-  (function findStrs() {
-    var inStr = false;
-    var escaped = false;
-    var chars = input.split("");
-    chars.forEach(function(char, index) {
-      if (inStr && char.match(/\s|\(|\)|\[|\]/)) {
-        chars[index] = "\033" + char;
-      }
-      if (!escaped && char === "\"") {
-        inStr = !inStr;
-      }
-    });
-    input = chars.join("");
-  }());
-  
-  (function removeComments() {
-    input = input.replace(/(^|.)\[[\s\S]+?\]/g, function(match, pre) {
-      if (pre !== "\033") return pre;
-      else return match;
-    }).replace(/(^|.)(\s|\(|\))\s+/g, function(match, pre, space) {
-      if (pre !== "\033") return pre + " ";
-      else { console.log(match); return match; }
-    });
-  }());
-  
-  input = input.replace(/^\s+|\s+$/g, "");
-
-  (function split() {
-    var tokens = [];
-    var token = "";
-    var escaped = false;
-    var chars = input.split("");
-    chars.forEach(function(char) {
-      if (char === "\033") {
-        escaped = true;
-        return;
-      }
-      else if (char.match(/\s|\(|\)/) && !escaped) {
-        token && tokens.push(token);
-        token = "";
-      }
-      else {
-        token += char;
-      }
-      escaped = false;
-    });
-    input = tokens.concat([token]);
-  }());
-  
-
-  (function convertVals() {
-    input.forEach(function(token, index) {
-      if (token.substring(0, 1) === "\"" && token.substr(-1) === "\"") {
-        token = token.split("");
-        token.forEach(function(char, index) {
-          if (char === "\033") token.splice(index, 1);
-        });
-        input[index] = JSON.parse(token.join(""));
-      }
-      else if (token.match(/^[0-9]+(\.[0-9]+)?$/)) {
-        input[index] = +token;
-      }
-      else if (token.substring(0, 1) === "$") {
-        input[index] = { type: "var", name: token.substring(1) };
-      }
-      else {
-        input[index] = { type: "fn", name: token };
-      }
-    });
-  }());
-  
-  return (function run() {
-    var stack = [];
-    input.forEach(function(token, index) {
-      if (token.type && token.type === "fn" && token.name === "set") {
-        var id = stack[stack.length - 2];
-        var val = stack[stack.length - 1];
-        if (val.type && val.type === "var") {
-          val = vars[val.name];
-        }
-        vars[id.name] = val;
-      }
-      else if (token.type && token.type === "fn" && token.name === "gset") {
-        var id = stack[stack.length - 2];
-        var val = stack[stack.length - 1];
-        if (val.type && val.type === "var") {
-          val = vars[val.name];
-        }
-        
-         vars[id.name] = gvars[id.name] = val;
-      }
-      else if (token.type && token.type === "fn" && token.name === "`set") {
-        var id = stack[stack.length - 2];
-        var val = stack[stack.length - 1];
-        if (val.type && val.type === "var") {
-          val = vars[val.name];
-        }
-        stack.pop();
-        stack.pop();
-        stack.push(function() {
-          vars[id.name] = val;
-        });
-      }
-      else if (token.type && token.type === "fn" && token.name === "`gset") {
-        var id = stack[stack.length - 2];
-        var val = stack[stack.length - 1];
-        if (val.type && val.type === "var") {
-          val = vars[val.name];
-        }
-        stack.pop();
-        stack.pop();
-        stack.push(function() {
-          vars[id.name] = gvars[id.name] = val;
-        });
-      }
-      else if (token.type && token.type === "fn") {
-        if (token.name.substring(0, 1) !== "`") {
-          var args = [];
-          for (var i = 1; i < fns[token.name].args + 1; i++) {
-            args.unshift(stack[stack.length - i]);
-          }
-          for (var j = 0; j < args.length; stack.pop(), j++);
-          args.forEach(function(arg, index) {
-            if (arg.type && arg.type === "var") {
-              args[index] = vars[arg.name];
-            }
-          });
-          stack.push(fns[token.name].body.apply(null, args));
-        }
-        else {
-          (function() {
-            token.name = token.name.substring(1);            
-            var args = [];
-            for (var i = 1; i < fns[token.name].args + 1; i++) {
-              args.unshift(stack[stack.length - i]);
-            }
-            for (var j = 0; j < args.length; stack.pop(), j++);
-            args.forEach(function(arg, index) {
-              if (arg.type && arg.type === "var") {
-                args[index] = vars[arg.name];
-              }
-            });
-            stack.push(function() {
-              return fns[token.name].body.apply(null, args);
-            });
-          }());
-        }
-      }
-      else {
-        stack.push(token);
-      }
-    });
-    return stack[stack.length - 1];
-  }());
-}
-var inputs = input.split(/\s*\n---[ \t]*\n\s*/);
-// global.fns = {
-//   // "+": {
-//   //   args: 2,
-//   //   body: function(a, b) {
-//   //     return a + b;
-//   //   }
-//   // },
-//   "-": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a - b;
-//     }
-//   },
-//   "*": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a * b;
-//     }
-//   },
-//   "/": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a / b;
-//     }
-//   },
-//   "÷": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a / b;
-//     }
-//   },
-//   "^": {
-//     args: 2,
-//     body: function(a, b) {
-//       return Math.pow(a, b);
-//     }
-//   },
-//   "=": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a === b;
-//     }
-//   },
-//   "!=": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a !== b;
-//     }
-//   },
-//   "≠": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a !== b;
-//     }
-//   },
-//   ">": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a > b;
-//     }
-//   },
-//   "<": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a < b;
-//     }
-//   },
-//   "<=": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a <= b;
-//     }
-//   },
-//   ">=": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a >= b;
-//     }
-//   },
-//   "≤": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a <= b;
-//     }
-//   },
-//   "≥": {
-//     args: 2,
-//     body: function(a, b) {
-//       return a >= b;
-//     }
-//   },
-//   "when": {
-//     args: 2,
-//     body: function(pred, resp) {
-//       if (pred) {
-//         if (typeof resp === "function") return resp();
-//         else if (typeof resp === "string") return fns[resp].body();
+var input = require("file").read(require("file").join(require("file").cwd(), system.args[system.args.length - 1]));
+require("./lib/interpreter").init(input, "narwhal");
+// global.gvars = {};
+// function exec(input, fns, vars) {
+//   (function findStrs() {
+//     var inStr = false;
+//     var escaped = false;
+//     var chars = input.split("");
+//     chars.forEach(function(char, index) {
+//       if (inStr && char.match(/\s|\(|\)|\[|\]/)) {
+//         chars[index] = "\033" + char;
 //       }
-//     }
-//   },
-//   "when-data": {
-//     args: 3,
-//     body: function(pred, data, resp) {
-//       if (pred) {
-//         return fns[resp].body.apply(null, data);
+//       if (!escaped && char === "\"") {
+//         inStr = !inStr;
 //       }
-//     }
-//   },
-//   "unless": {
-//     args: 2,
-//     body: function(pred, resp) {
-//       if (!pred) {
-//         if (typeof resp === "function") return resp();
-//         else if (typeof resp === "string") return fns[resp].body();
-//       }
-//     }
-//   },
-//   "unless-data": {
-//     args: 3,
-//     body: function(pred, data, resp) {
-//       if (!pred) {
-//         return fns[resp].body.apply(null, data);
-//       }
-//     }
-//   },
-//   "if": {
-//     args: 3,
-//     body: function(pred, resp, els) {
-//       if (pred) {
-//         if (typeof resp === "function") return resp();
-//         else if (typeof resp === "string") return fns[resp].body();
-//       }
-//       else {
-//         if (typeof els === "function") return els();
-//         else if (typeof els === "string") return fns[els].body();
-//       }
-//     }
-//   },
-//   "if-data": {
-//     args: 5,
-//     body: function(pred, rdata, resp, edata, els) {
-//       if (pred) {
-//         return fns[resp].body.apply(null, rdata);
-//       }
-//       else {
-//         return fns[els].body.apply(null, edata);
-//       }
-//     }
-//   },
-//   "un`": {
-//     args: 1,
-//     body: function(defered) {
-//       return (typeof defered === "function") ? defered() : defered;
-//     }
-//   },
-//   "run": {
-//     args: 1,
-//     body: function(deferredarr) {
-//       var last;
-//       deferredarr.forEach(function(deferred) { last = deferred(); });
-//       return last;
-//     }
-//   },
-//   ",": {
-//     args: 2,
-//     body: function(list, val) {
-//       if (list instanceof Array) {
-//         return list.concat([val]);
-//       }
-//       else {
-//         return [list, val];
-//       }
-//     }
-//   },
-//   "car": {
-//     args: 1,
-//     body: function(list) {
-//       return list[0];
-//     }
-//   },
-//   "cdr": {
-//     args: 1,
-//     body: function(list) {
-//       return list.slice(1);
-//     }
-//   },
-//   "get": {
-//     args: 2,
-//     body: function(obj, val) {
-//       return obj[val];
-//     }
-//   },
-//   "loop": {
-//     args: 2,
-//     body: function(itter, fn) {
-//       for (var i = 1; i <= itter; i++) {
-//         if (typeof fn === "string") fns[fn].body(i);
-//         else if (typeof fn === "function") fn();
-//       }
-//     }
-//   },
-//   "loop-data": {
-//     args: 3,
-//     body: function(itter, data, fn) {
-//       for (var i = 1; i <= itter; i++) {
-//         fns[fn].body.apply(null, [i].concat(data));
-//       }
-//     }
-//   },
-//   "apply": {
-//     args: 2,
-//     body: function(args, fn) {
-//       return fns[fn].body.apply(null, args);
-//     }
-//   },
-//   "arr": {
-//     args: 1,
-//     body: function(val) {
-//       return [val];
-//     }
-//   },
-//   "array": {
-//     args: 0,
-//     body: function() {
-//       return [];
-//     }
-//   },
-//   "print": {
-//     args: 1,
-//     body: function(val) {
-//       console.log(val);
-//       return val;
-//     }
-//   }
-// };
+//     });
+//     input = chars.join("");
+//   }());
+//   
+//   (function removeComments() {
+//     input = input.replace(/(^|.)\[[\s\S]+?\]/g, function(match, pre) {
+//       if (pre !== "\033") return pre;
+//       else return match;
+//     }).replace(/(^|.)(\s|\(|\))\s+/g, function(match, pre, space) {
+//       if (pre !== "\033") return pre + " ";
+//       else { console.log(match); return match; }
+//     });
+//   }());
+//   
+//   input = input.replace(/^\s+|\s+$/g, "");
 // 
-// var prims = require("./lib/primitives");
-// for (var prim in prims) {
-//   fns[prim] = prims[prim];
+//   (function split() {
+//     var tokens = [];
+//     var token = "";
+//     var escaped = false;
+//     var chars = input.split("");
+//     chars.forEach(function(char) {
+//       if (char === "\033") {
+//         escaped = true;
+//         return;
+//       }
+//       else if (char.match(/\s|\(|\)/) && !escaped) {
+//         token && tokens.push(token);
+//         token = "";
+//       }
+//       else {
+//         token += char;
+//       }
+//       escaped = false;
+//     });
+//     input = tokens.concat([token]);
+//   }());
+//   
+// 
+//   (function convertVals() {
+//     input.forEach(function(token, index) {
+//       if (token.substring(0, 1) === "\"" && token.substr(-1) === "\"") {
+//         token = token.split("");
+//         token.forEach(function(char, index) {
+//           if (char === "\033") token.splice(index, 1);
+//         });
+//         input[index] = JSON.parse(token.join(""));
+//       }
+//       else if (token.match(/^[0-9]+(\.[0-9]+)?$/)) {
+//         input[index] = +token;
+//       }
+//       else if (token.substring(0, 1) === "$") {
+//         input[index] = { type: "var", name: token.substring(1) };
+//       }
+//       else {
+//         input[index] = { type: "fn", name: token };
+//       }
+//     });
+//   }());
+//   
+//   return (function run() {
+//     var stack = [];
+//     input.forEach(function(token, index) {
+//       if (token.type && token.type === "fn" && token.name === "set") {
+//         var id = stack[stack.length - 2];
+//         var val = stack[stack.length - 1];
+//         if (val.type && val.type === "var") {
+//           val = vars[val.name];
+//         }
+//         vars[id.name] = val;
+//       }
+//       else if (token.type && token.type === "fn" && token.name === "gset") {
+//         var id = stack[stack.length - 2];
+//         var val = stack[stack.length - 1];
+//         if (val.type && val.type === "var") {
+//           val = vars[val.name];
+//         }
+//         
+//          vars[id.name] = gvars[id.name] = val;
+//       }
+//       else if (token.type && token.type === "fn" && token.name === "`set") {
+//         var id = stack[stack.length - 2];
+//         var val = stack[stack.length - 1];
+//         if (val.type && val.type === "var") {
+//           val = vars[val.name];
+//         }
+//         stack.pop();
+//         stack.pop();
+//         stack.push(function() {
+//           vars[id.name] = val;
+//         });
+//       }
+//       else if (token.type && token.type === "fn" && token.name === "`gset") {
+//         var id = stack[stack.length - 2];
+//         var val = stack[stack.length - 1];
+//         if (val.type && val.type === "var") {
+//           val = vars[val.name];
+//         }
+//         stack.pop();
+//         stack.pop();
+//         stack.push(function() {
+//           vars[id.name] = gvars[id.name] = val;
+//         });
+//       }
+//       else if (token.type && token.type === "fn") {
+//         if (token.name.substring(0, 1) !== "`") {
+//           var args = [];
+//           for (var i = 1; i < fns[token.name].args + 1; i++) {
+//             args.unshift(stack[stack.length - i]);
+//           }
+//           for (var j = 0; j < args.length; stack.pop(), j++);
+//           args.forEach(function(arg, index) {
+//             if (arg.type && arg.type === "var") {
+//               args[index] = vars[arg.name];
+//             }
+//           });
+//           stack.push(fns[token.name].body.apply(null, args));
+//         }
+//         else {
+//           (function() {
+//             token.name = token.name.substring(1);            
+//             var args = [];
+//             for (var i = 1; i < fns[token.name].args + 1; i++) {
+//               args.unshift(stack[stack.length - i]);
+//             }
+//             for (var j = 0; j < args.length; stack.pop(), j++);
+//             args.forEach(function(arg, index) {
+//               if (arg.type && arg.type === "var") {
+//                 args[index] = vars[arg.name];
+//               }
+//             });
+//             stack.push(function() {
+//               return fns[token.name].body.apply(null, args);
+//             });
+//           }());
+//         }
+//       }
+//       else {
+//         stack.push(token);
+//       }
+//     });
+//     return stack[stack.length - 1];
+//   }());
 // }
-global.fns = require("./lib/primitives");
-
-inputs.forEach(function(input) {
-  input.replace(/^([^\n]*)\n([\s\S]*)$/, function(match, args, body) {
-    args = args.replace(/\(|\)/g, " ").split(/\s+/);
-    var label = args[args.length - 1];
-    args.pop();
-    fns[label] = {
-      args: args.length,
-      body: function() {
-        var _args = arguments;
-        var vars = Object.create(gvars);
-        args.forEach(function(arg, index) {
-          vars[arg.replace(/^\$/, "")] = _args[index];
-        });
-        return exec(body, fns, vars);
-      }
-    };
-  });
-});
-
-fns.main.body();
+// var inputs = input.split(/\s*\n---[ \t]*\n\s*/);
+// 
+// global.fns = require("./lib/primitives-narwhal");
+// 
+// inputs.forEach(function(input) {
+//   input.replace(/^([^\n]*)\n([\s\S]*)$/, function(match, args, body) {
+//     args = args.replace(/\(|\)/g, " ").split(/\s+/);
+//     var label = args[args.length - 1];
+//     args.pop();
+//     fns[label] = {
+//       args: args.length,
+//       body: function() {
+//         var _args = arguments;
+//         var vars = Object.create(gvars);
+//         args.forEach(function(arg, index) {
+//           vars[arg.replace(/^\$/, "")] = _args[index];
+//         });
+//         return exec(body, fns, vars);
+//       }
+//     };
+//   });
+// });
+// 
+// fns.main.body();
