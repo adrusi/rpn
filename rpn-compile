@@ -1,0 +1,4 @@
+#!/usr/bin/env js
+
+var input = require("file").read(require("file").join(require("file").cwd(), system.args[system.args.length - 1]));
+system.stdout.print(require("./lib/compiler").init(input, "narwhal-compiled"));

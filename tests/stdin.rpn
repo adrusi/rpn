@@ -1,2 +1,19 @@
 main
-  read print
+  "\033[35mOK? y/n > \033[0m" prompt main/interpret
+
+---
+
+$resp main/interpret
+  $resp $resp un` set
+  array
+    ($resp "y" =) , "\033[36mGreat!\033[0m" `print ,
+    ($resp "n" =) , "\033[31mThat's too bad\033[0m" `print ,
+    (else) ,
+      ("\033[41;30mERROR\033[0m\n\033[35mOK? y/n > \033[0m" `prompt) `main/interpret ,
+  cond
+
+---
+
+$prompt prompt
+  $prompt write
+  read

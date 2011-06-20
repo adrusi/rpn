@@ -11,3 +11,6 @@ To use:
  - run `$ rpn path/to/script.rpn`
 
 When the language becomes more stable, I will add some documentation.
+
+# Implementations
+Currently, RPN runs on both node and narwhal. Node is having problems with reading synchronously from stdin.
